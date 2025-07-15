@@ -50,15 +50,15 @@ def main(args=None):
         wait(0.5)
 
     def approach(pos):
-        # Zì¶•ìœ¼ë¡œ 250mm ìœ„ë¡œ ì ‘ê·¼ ìœ„ì¹˜ ìƒì„±
+        # Z축으로 250mm 위로 접근 위치 생성
         return posx([pos[0], pos[1], pos[2] + 250, pos[3], pos[4], pos[5]])
 
-    # ì¤€ë¹„ ìžì„¸ ë° ì‚¬ì „ ìœ„ì¹˜ ì§€ì •
+    # 준비 자세 및 사전 위치 지정
     JReady = [0, 0, 90, 0, 90, 0]  # home
-    JReady2 = [-2.91, 3.49, 47.36, -0.57, 83.65, 0.70]  # ê±°ì¹˜ ì´ˆê¸°
-    JReady3 = [-2.91, 3.49, 47.36, -0.57, 13.17, 0.70]  # ê±°ì¹˜ í›„
-    Jmove4 = [-21.65, 4.96, 23.77, 4.68, 132.40, 0.69] # releas í›„ ìœ„ì¹˜1
-    Jmove5 = [-70.61, 6.50, 52.20, -3.84, 118.49, -1.38] # releas í›„ ìœ„ì¹˜2
+    JReady2 = [-2.91, 3.49, 47.36, -0.57, 83.65, 0.70]  # 거치 초기
+    JReady3 = [-2.91, 3.49, 47.36, -0.57, 13.17, 0.70]  # 거치 후
+    Jmove4 = [-21.65, 4.96, 23.77, 4.68, 132.40, 0.69] # releas 후 위치1
+    Jmove5 = [-70.61, 6.50, 52.20, -3.84, 118.49, -1.38] # releas 후 위치2
 
     set_tool("Tool Weight_2FG")
     set_tcp("2FG_TCP")
@@ -69,19 +69,19 @@ def main(args=None):
 
     node.get_logger().info("Waiting for external force...")
 
-    # 1. ìˆœì‘ ì œì–´ ì¼œê¸°
+    # 1. 순응 제어 켜기
     task_compliance_ctrl(stx=[500, 500, 500, 100, 100, 100])
     time.sleep(0.5)
 
     try:
         while rclpy.ok():
-            # 2. ë§¤ ë°˜ë³µë§ˆë‹¤ ê·¸ë¦¬í¼ ì—´ê¸°
+            # 2. 매 반복마다 그리퍼 열기
             release()
 
-            # 3. ê·¸ë¦¬í¼ ì˜¤í”ˆ ì§í›„ ì•ˆì •í™” ëŒ€ê¸° (0.5ì´ˆ)
+            # 3. 그리퍼 오픈 직후 안정화 대기 (0.5초)
             wait(0.5)
 
-            # 4. ì™¸ë¶€ ë‹¹ê¹€ ì—¬ë¶€ ì—°ì† íŒì •(3íšŒ í´ë§)
+            # 4. 외부 당김 여부 연속 판정(3회 폴링)
             start_time = time.time()
             timeout = 10.0
             pulled = False
@@ -96,7 +96,7 @@ def main(args=None):
                 else:
                     consecutive_hits = 0
 
-                # 3íšŒ ì—°ì† ê²€ì¶œë˜ë©´ pulled=True
+                # 3회 연속 검출되면 pulled=True
                 if consecutive_hits >= 3:
                     pulled = True
                     node.get_logger().info("Pull detected (3 consecutive).")
@@ -106,32 +106,32 @@ def main(args=None):
                     node.get_logger().error("Pull not detected within timeout; aborting loop.")
                     break
 
-            # 5. ìˆœì‘ ì œì–´ í•´ì œ
+            # 5. 순응 제어 해제
             release_compliance_ctrl()
 
             if not pulled:
                 node.get_logger().error("No pull detected; exiting without closing gripper.")
                 return
 
-            # 6. ì‹¤ì œ ê·¸ë¦¬í¼ í´ë¡œì¦ˆ
+            # 6. 실제 그리퍼 클로즈
             grip()
             node.get_logger().info("Gripper closed. Waiting 4 seconds before lift...")
-            wait(4.0)  # ì—¬ìœ  ëŒ€ê¸°
+            wait(4.0)  # 여유 대기
 
-            # 7. í˜„ìž¬ ìœ„ì¹˜ ì½ì–´ì„œ Zì¶• 250mm ìœ„ë¡œ ì ‘ê·¼
+            # 7. 현재 위치 읽어서 Z축 250mm 위로 접근
             pos, _ = get_current_posx(ref=DR_BASE)
             node.get_logger().info(f"Current pos (xyzrpy): {pos}")
             movel(approach(pos), vel=VELOCITY, acc=ACC)
             node.get_logger().info("Moved up by 250mm after grip.")
 
-            # 8. ë‘ë²ˆì§¸ ìœ„ì¹˜ ì´ë™
+            # 8. 두번째 위치 이동
             movej(JReady3, vel=VELOCITY, acc=ACC)
             node.get_logger().info("Final joint move completed.")
 
-            # ìž ì‹œê¸°ë‹¤ë¦¬ê¸° 10ì´ˆ
+            # 잠시기다리기 10초
             wait(10.0)
 
-            # 9. ì•ˆì „í•œ ìœ„ì¹˜ ì´ë™()
+            # 9. 안전한 위치 이동()
             release()
             wait(0.5)
             movej(Jmove4, vel=VELOCITY, acc=ACC)
