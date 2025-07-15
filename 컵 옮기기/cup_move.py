@@ -2,12 +2,12 @@ import rclpy
 import DR_init
 import time
 
-# ë¡œë´‡ ê¸°ë³¸ ì„¤ì •
+# 로봇 기본 설정
 ROBOT_ID = "dsr01"
 ROBOT_MODEL = "m0609"
 VELOCITY, ACC = 40, 40
 
-# DR_init ì„¤ì •
+# DR_init 설정
 DR_init.__dsr__id = ROBOT_ID
 DR_init.__dsr__model = ROBOT_MODEL
 
@@ -36,38 +36,38 @@ def main(args=None):
             get_current_posx,
             release_force,
             get_tool_force,
-            get_workpiece_weight,   # â† ì—¬ê¸°!
+            get_workpiece_weight,   # ← 여기!
         )
         from DR_common2 import posx
     except ImportError as e:
         print(f"Error importing DSR_ROBOT2 : {e}")
         return
 
-    # âœ… ë°”ë‹¥ ì ‘ì´‰ ê°ì§€ í•¨ìˆ˜ (Zì¶• íž˜ì´ ì¼ì • ì´ìƒ ì¦ê°€í•˜ë©´ ì ‘ì´‰ìœ¼ë¡œ ê°„ì£¼)
+    # ✅ 바닥 접촉 감지 함수 (Z축 힘이 일정 이상 증가하면 접촉으로 간주)
     def wait_until_contact(threshold_force=1.5, timeout=5.0):
-        print("[C ìœ„ì¹˜: ë°”ë‹¥ ì ‘ì´‰ ê°ì§€ ì‹œìž‘]")
+        print("[C 위치: 바닥 접촉 감지 시작]")
         start_time = time.time()
         while time.time() - start_time < timeout:
-            # ì—¬ê¸´ get_tool_force ê·¸ëŒ€ë¡œ ì‚¬ìš© (íž˜ ê°ì§€ë‹ˆê¹Œ)
+            # 여긴 get_tool_force 그대로 사용 (힘 감지니까)
             force_z = get_tool_force(DR_BASE)[2]
-            print(f"[ê°ì§€ ì¤‘] í˜„ìž¬ Zì¶• Force: {force_z:.2f}N")
+            print(f"[감지 중] 현재 Z축 Force: {force_z:.2f}N")
             if force_z >= threshold_force:
-                print("ðŸ“Œ ì»µì´ ë°”ë‹¥ì— ë‹¿ìŒ ê°ì§€ë¨!")
+                print("📌 컵이 바닥에 닿음 감지됨!")
                 return True
             time.sleep(0.05)
-        print("âŒ ë°”ë‹¥ ê°ì§€ ì‹¤íŒ¨ (ì‹œê°„ ì´ˆê³¼)")
+        print("❌ 바닥 감지 실패 (시간 초과)")
         return False
 
-    # âœ… ë¬´ê²Œ ë³€í™”ë¥¼ ê°ì§€í•˜ëŠ” í•¨ìˆ˜ (get_workpiece_weightë¡œ ë‹¨ìˆœí™”)
+    # ✅ 무게 변화를 감지하는 함수 (get_workpiece_weight로 단순화)
     def wait_for_weight(threshold_delta=0.05, timeout=10.0, require_count=3):
         baseline = get_workpiece_weight()
-        print(f"\n[ê¸°ì¤€ ë¬´ê²Œ] {baseline:.3f} kg\n")
+        print(f"\n[기준 무게] {baseline:.3f} kg\n")
 
         start_time = time.time()
         detected_count = 0
         last_log_time = start_time
 
-        print("[ê°ì§€ ëŒ€ê¸°] ë¬´ê²Œ ë³€í™”(ì¦ê°€) ê¸°ë‹¤ë¦¼...")
+        print("[감지 대기] 무게 변화(증가) 기다림...")
 
         while time.time() - start_time < timeout:
             weight = get_workpiece_weight()
@@ -75,7 +75,7 @@ def main(args=None):
 
             now = time.time()
             if now - last_log_time >= 0.2:
-                print(f"[ë¬´ê²Œ ìƒíƒœ] í˜„ìž¬: {weight:.3f} kg | Î”ë¬´ê²Œ: {delta:.3f} kg | count: {detected_count}")
+                print(f"[무게 상태] 현재: {weight:.3f} kg | Δ무게: {delta:.3f} kg | count: {detected_count}")
                 last_log_time = now
 
             if delta >= threshold_delta:
@@ -84,12 +84,12 @@ def main(args=None):
                 detected_count = 0
 
             if detected_count >= require_count:
-                print("\n[ê°ì§€ ì„±ê³µ] ìœ ì˜ë¯¸í•œ ë¬´ê²Œ ë³€í™” ê°ì§€ë¨!\n")
+                print("\n[감지 성공] 유의미한 무게 변화 감지됨!\n")
                 return True
 
             time.sleep(0.1)
 
-        print("\n[ê°ì§€ ì‹¤íŒ¨] ì‹œê°„ ì´ˆê³¼: ìœ ì˜ë¯¸í•œ ë¬´ê²Œ ë³€í™” ì—†ìŒ\n")
+        print("\n[감지 실패] 시간 초과: 유의미한 무게 변화 없음\n")
         return False
 
     def grasp():
@@ -119,13 +119,13 @@ def main(args=None):
     C_pos = posx(480.800, 20.380, 70.270, 163.55, -177.71, 161.06)
     JReady = [0, 0, 90, 0, 90, 0]
 
-    print("[ì´ë™] ì‹œìž‘ ìœ„ì¹˜(JReady)ë¡œ ì´ë™ ì¤‘...")
+    print("[이동] 시작 위치(JReady)로 이동 중...")
     set_tool("Tool Weight_2FG")
     set_tcp("2FG_TCP")
     gripper_open()
     movej(JReady, vel=VELOCITY, acc=ACC)
 
-    print("[ìž‘ì—…] A ìœ„ì¹˜ ì ‘ê·¼ ë° ì»µ ì§‘ê¸°")
+    print("[작업] A 위치 접근 및 컵 집기")
     movel(approach(A_pos), v=VELOCITY, a=ACC)
     movel(A_pos, v=VELOCITY, a=ACC)
     gripper_close()
@@ -133,16 +133,16 @@ def main(args=None):
     movel(approach(A_pos), v=VELOCITY, a=ACC)
     movel(high_approach(A_pos), v=VELOCITY, a=ACC)
 
-    print("[ì´ë™] B ìœ„ì¹˜ë¡œ ì´ë™ ì¤‘...")
+    print("[이동] B 위치로 이동 중...")
     movel(approach(B_pos), v=VELOCITY, a=ACC)
     movel(B_pos, v=VELOCITY, a=ACC)
 
-    print("[ëŒ€ê¸°] B ìœ„ì¹˜ì—ì„œ ë¬¼ì²´ íˆ¬ìž… ëŒ€ê¸° ì¤‘...")
+    print("[대기] B 위치에서 물체 투입 대기 중...")
     wait(5.0)
 
-    print("[ê°ì§€] ë¬´ê²Œ ë³€í™” ê°ì§€ ì‹œë„ ì¤‘...")
-    if not wait_for_weight(threshold_delta=0.05, timeout=10.0, require_count=3):  # 50g ë³€í™” ê°ì§€ (í™˜ê²½ì— ë”°ë¼ ì¡°ì ˆ)
-        print("[ì‹¤íŒ¨] ê°ì§€ ì‹¤íŒ¨ â†’ ë³µê·€")
+    print("[감지] 무게 변화 감지 시도 중...")
+    if not wait_for_weight(threshold_delta=0.05, timeout=10.0, require_count=3):  # 50g 변화 감지 (환경에 따라 조절)
+        print("[실패] 감지 실패 → 복귀")
         movel(approach(B_pos), v=VELOCITY, a=ACC)
         movel(high_approach(B_pos), v=VELOCITY, a=ACC)
         movej(JReady, vel=VELOCITY, acc=ACC)
@@ -150,24 +150,24 @@ def main(args=None):
         rclpy.shutdown()
         return
 
-    print("[ì´ë™] ê°ì§€ ì„±ê³µ â†’ C ìœ„ì¹˜ë¡œ ì´ë™")
+    print("[이동] 감지 성공 → C 위치로 이동")
     movel(approach(B_pos), v=VELOCITY, a=ACC)
     movel(high_approach(B_pos), v=VELOCITY, a=ACC)
-    movel(approach(C_pos), v=20, a=20)  # ì¡°ê¸ˆ ëŠë¦¬ê²Œ ì ‘ê·¼
-    movel(C_pos, v=10, a=10)  # ì²œì²œížˆ ë°”ë‹¥ìœ¼ë¡œ
+    movel(approach(C_pos), v=20, a=20)  # 조금 느리게 접근
+    movel(C_pos, v=10, a=10)  # 천천히 바닥으로
 
-    print("[ê°ì§€] ì»µì´ ë°”ë‹¥ì— ë‹¿ëŠ” ìˆœê°„ ê°ì§€ ì¤‘...")
+    print("[감지] 컵이 바닥에 닿는 순간 감지 중...")
     if wait_until_contact(threshold_force=1.5, timeout=5.0):
         gripper_open()
         wait(0.5)
         movel(approach(C_pos), v=VELOCITY, a=ACC)
     else:
-        print("[ê²½ê³ ] ë°”ë‹¥ ê°ì§€ ì‹¤íŒ¨ â†’ ê¸°ë³¸ ë¦´ë¦¬ì¦ˆ ìˆ˜í–‰")
+        print("[경고] 바닥 감지 실패 → 기본 릴리즈 수행")
         gripper_open()
         wait(0.5)
         movel(approach(C_pos), v=VELOCITY, a=ACC)
 
-    print("[ì™„ë£Œ] ìž‘ì—… ì¢…ë£Œ")
+    print("[완료] 작업 종료")
     node.destroy_node()
     rclpy.shutdown()
 
