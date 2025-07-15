@@ -1,96 +1,96 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# ROS2 ê´€ë ¨ ëª¨ë“ˆ ë¶ˆëŸ¬ì˜¤ê¸°
-import rclpy                     # ROS2 Python í´ë¼ì´ì–¸íŠ¸ ë¼ì´ë¸ŒëŸ¬ë¦¬
-import DR_init                  # Doosan ë¡œë´‡ìš© ROS2 ì´ˆê¸°í™” ëª¨ë“ˆ
-import time                     # ì‹œê°„ ì§€ì—°ì„ ìœ„í•œ ëª¨ë“ˆ
-import numpy as np              # ê´€ì ˆ ìœ„ì¹˜ ì €ìž¥ì„ ìœ„í•œ numpy
-import sys, select              # í‚¤ë³´ë“œ ìž…ë ¥ ê°ì§€ë¥¼ ìœ„í•œ ëª¨ë“ˆ
+# ROS2 관련 모듈 불러오기
+import rclpy                     # ROS2 Python 클라이언트 라이브러리
+import DR_init                  # Doosan 로봇용 ROS2 초기화 모듈
+import time                     # 시간 지연을 위한 모듈
+import numpy as np              # 관절 위치 저장을 위한 numpy
+import sys, select              # 키보드 입력 감지를 위한 모듈
 
-# ë¡œë´‡ IDì™€ ëª¨ë¸ëª…ì„ ì „ì—­ ë³€ìˆ˜ë¡œ ì„¤ì •
+# 로봇 ID와 모델명을 전역 변수로 설정
 ROBOT_ID    = "dsr01"
 ROBOT_MODEL = "m0609"
 
-# ë©”ì¸ í•¨ìˆ˜ ì •ì˜
+# 메인 함수 정의
 def main(args=None):
-    # ROS2 ì´ˆê¸°í™”
+    # ROS2 초기화
     rclpy.init(args=args)
 
-    # teach_joint_pathë¼ëŠ” ì´ë¦„ì˜ ë…¸ë“œë¥¼ ìƒì„±í•˜ê³ , ë„¤ìž„ìŠ¤íŽ˜ì´ìŠ¤ë¥¼ ë¡œë´‡ IDë¡œ ì„¤ì •
+    # teach_joint_path라는 이름의 노드를 생성하고, 네임스페이스를 로봇 ID로 설정
     node = rclpy.create_node("teach_joint_path", namespace=ROBOT_ID)
 
-    # DSR ë¡œë´‡ API ë‚´ë¶€ì—ì„œ ì‚¬ìš©í•  ë…¸ë“œì™€ ë¡œë´‡ ì •ë³´ ë“±ë¡
+    # DSR 로봇 API 내부에서 사용할 노드와 로봇 정보 등록
     DR_init.__dsr__node   = node
     DR_init.__dsr__id     = ROBOT_ID
     DR_init.__dsr__model  = ROBOT_MODEL
 
-    # DSR APIì—ì„œ ì‚¬ìš©í•  ì£¼ìš” í•¨ìˆ˜ ë° ì˜ˆì™¸ í´ëž˜ìŠ¤ ìž„í¬íŠ¸
+    # DSR API에서 사용할 주요 함수 및 예외 클래스 임포트
     from DSR_ROBOT2 import get_current_posj, release_compliance_ctrl, task_compliance_ctrl, DR_Error
 
-    # í˜¹ì‹œ ì´ì „ì— ì¼œì ¸ ìžˆì„ ìˆ˜ ìžˆëŠ” ìˆœì‘ ì œì–´ í•´ì œ
+    # 혹시 이전에 켜져 있을 수 있는 순응 제어 해제
     release_compliance_ctrl()
 
-    # 6ì¶• ëª¨ë‘ stiffness(ê°•ì„±)ë¥¼ 0ìœ¼ë¡œ ì„¤ì •í•˜ì—¬ ì‚¬ìš©ìžê°€ ì†ìœ¼ë¡œ ë¡œë´‡ì„ ì‰½ê²Œ ì›€ì§ì¼ ìˆ˜ ìžˆë„ë¡ ì„¤ì •
+    # 6축 모두 stiffness(강성)를 0으로 설정하여 사용자가 손으로 로봇을 쉽게 움직일 수 있도록 설정
     ultra_low_stx = [0, 0, 0, 0, 0, 0]
     task_compliance_ctrl(ultra_low_stx, 0)
 
-    # ê´€ì ˆ ìœ„ì¹˜ë¥¼ ì €ìž¥í•  ë¦¬ìŠ¤íŠ¸ ì´ˆê¸°í™”
+    # 관절 위치를 저장할 리스트 초기화
     joint_paths = []
 
-    # ì €ìž¥ íšŸìˆ˜ ì¹´ìš´í„° ì´ˆê¸°í™”
+    # 저장 횟수 카운터 초기화
     count = 0
 
-    # ì‚¬ìš©ìžì—ê²Œ teach ëª¨ë“œ ì‹œìž‘ ì•ˆë‚´ ë©”ì‹œì§€ ì¶œë ¥
-    node.get_logger().info("Teach ëª¨ë“œ ì‹œìž‘: ì—”í„° ëˆ„ë¥´ë©´ ì¢…ë£Œ")
+    # 사용자에게 teach 모드 시작 안내 메시지 출력
+    node.get_logger().info("Teach 모드 시작: 엔터 누르면 종료")
 
     try:
-        # ë¬´í•œ ë£¨í”„ ì‹œìž‘ (ì—”í„° ìž…ë ¥ ì „ê¹Œì§€ ë°˜ë³µ)
+        # 무한 루프 시작 (엔터 입력 전까지 반복)
         while True:
-            # ì‚¬ìš©ìžë¡œë¶€í„° í‚¤ë³´ë“œ ìž…ë ¥ì´ ë“¤ì–´ì™”ëŠ”ì§€ í™•ì¸ (ì—”í„° ìž…ë ¥ ì‹œ ì¢…ë£Œ)
+            # 사용자로부터 키보드 입력이 들어왔는지 확인 (엔터 입력 시 종료)
             if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
-                _ = sys.stdin.readline()  # ìž…ë ¥ ë²„í¼ ë¹„ìš°ê¸°
-                break  # ë£¨í”„ ì¢…ë£Œ
+                _ = sys.stdin.readline()  # 입력 버퍼 비우기
+                break  # 루프 종료
 
             try:
-                # í˜„ìž¬ ë¡œë´‡ì˜ ê´€ì ˆ ìœ„ì¹˜ë¥¼ ê°€ì ¸ì˜¤ê¸°
+                # 현재 로봇의 관절 위치를 가져오기
                 joint_pos = get_current_posj()
             except DR_Error:
-                # ì—ëŸ¬ ë°œìƒ ì‹œ ê²½ê³  ì¶œë ¥ í›„ ìž ì‹œ ëŒ€ê¸° í›„ ìž¬ì‹œë„
-                node.get_logger().warn("get_current_joint_position() ì˜¤ë¥˜, ìž¬ì‹œë„")
+                # 에러 발생 시 경고 출력 후 잠시 대기 후 재시도
+                node.get_logger().warn("get_current_joint_position() 오류, 재시도")
                 time.sleep(0.01)
                 continue
 
-            # ë°›ì€ ê´€ì ˆ ë°ì´í„°ê°€ 6ê°œì˜ ê°’ì„ ê°€ì§„ ë¦¬ìŠ¤íŠ¸ ë˜ëŠ” ë°°ì—´ì¸ì§€ í™•ì¸
+            # 받은 관절 데이터가 6개의 값을 가진 리스트 또는 배열인지 확인
             if hasattr(joint_pos, "__len__") and len(joint_pos) == 6:
-                count += 1  # ì €ìž¥ íšŸìˆ˜ ì¦ê°€
-                node.get_logger().info(f"[{count}] ê´€ì ˆ ìœ„ì¹˜ ì €ìž¥: {joint_pos}")  # ë¡œê·¸ ì¶œë ¥
-                joint_paths.append(list(joint_pos))  # ê´€ì ˆ ìœ„ì¹˜ ì €ìž¥
-                time.sleep(2.0)  # 2ì´ˆ ê°„ê²©ìœ¼ë¡œ ì €ìž¥
+                count += 1  # 저장 횟수 증가
+                node.get_logger().info(f"[{count}] 관절 위치 저장: {joint_pos}")  # 로그 출력
+                joint_paths.append(list(joint_pos))  # 관절 위치 저장
+                time.sleep(2.0)  # 2초 간격으로 저장
             else:
-                # ìž˜ëª»ëœ í˜•ì‹ì˜ ë°ì´í„°ì¸ ê²½ìš° ê²½ê³  ì¶œë ¥ í›„ ìž¬ì‹œë„
-                node.get_logger().warn("ìž˜ëª»ëœ ê´€ì ˆ ìœ„ì¹˜ ë°ì´í„°")
+                # 잘못된 형식의 데이터인 경우 경고 출력 후 재시도
+                node.get_logger().warn("잘못된 관절 위치 데이터")
                 time.sleep(0.01)
 
-    # í‚¤ë³´ë“œ ì¸í„°ëŸ½íŠ¸(Ctrl+C) ì‹œ ì¢…ë£Œ ì²˜ë¦¬
+    # 키보드 인터럽트(Ctrl+C) 시 종료 처리
     except KeyboardInterrupt:
         pass
 
-    # ì €ìž¥í•œ ê´€ì ˆ ìœ„ì¹˜ ë°ì´í„°ë¥¼ numpy ë°°ì—´ë¡œ ì €ìž¥
+    # 저장한 관절 위치 데이터를 numpy 배열로 저장
     np.save("joint_path.npy", np.array(joint_paths))
 
-    # ì €ìž¥ ì™„ë£Œ ë©”ì‹œì§€ ì¶œë ¥
-    node.get_logger().info(f"joint_path.npy ì €ìž¥ ì™„ë£Œ, ì´ {len(joint_paths)} ì ")
+    # 저장 완료 메시지 출력
+    node.get_logger().info(f"joint_path.npy 저장 완료, 총 {len(joint_paths)} 점")
 
-    # ìˆœì‘ ì œì–´ í•´ì œ
+    # 순응 제어 해제
     release_compliance_ctrl()
 
-    # ë…¸ë“œ ì¢…ë£Œ
+    # 노드 종료
     node.destroy_node()
 
-    # ROS2 ì‹œìŠ¤í…œ ì¢…ë£Œ
+    # ROS2 시스템 종료
     rclpy.shutdown()
 
-# main() í•¨ìˆ˜ ì‹¤í–‰ ì¡°ê±´ í™•ì¸
+# main() 함수 실행 조건 확인
 if __name__ == "__main__":
     main()
